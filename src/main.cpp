@@ -5,20 +5,19 @@
 // File:        ADS1115 Test
 //  
 // Description:
+//  How to read the ADS1115 and how to read a shunt.
+//  The shunt used is 100mv/amp.
+//  Found if the shunt does not share a common ground with the ADS1115
+//  the readings are not steady. You must ground the low side of the shunt
+//  with the ground on the ADS1115
 //  
-//  
-//  
-//  
-//  
-//
 // History:     March-03-2021     Derek      Created
 //
 //---------------------------------------------------------------------------
 
-#include <Arduino.h>    // Arduino Framework <> searches the libraries paths
-
-#include <Wire.h>
-#include <U8g2lib.h>  // For text on the little on-chip OLED
+#include <Arduino.h>          // Arduino Framework <> searches the libraries paths
+#include <Wire.h>             // TWI/I2C library for Arduino & Wiring
+#include <U8g2lib.h>          // For text on the little on-chip OLED
 #include <Adafruit_ADS1015.h> // For the ADS1115 analog to digital converter 
 
 const String sketchName = "ADS1115 Test";
@@ -29,21 +28,21 @@ const String sketchName = "ADS1115 Test";
 // The active board is declared in platformio.ini. The defined is all caps
 // and is a combination of the environment and the default_envs.
 
-#if defined(ARDUINO_HELTEC_WIFI_LORA_32)
-  #define OLED_CLOCK 15              // Pins for OLED display
-  #define OLED_DATA 4
-  #define OLED_RESET 16
-//  #define LED_PIN 23 //Output pin for the WS2812B led strip. Dave recomends pin 5 but it is being used by LoRa on my board
+#if defined(ARDUINO_HELTEC_WIFI_LORA_32) //# is evaluated at time of compile
+  #define OLED_CLOCK SCL_OLED            // Pins for OLED display
+  #define OLED_DATA SDA_OLED
+  #define OLED_RESET RST_OLED
+//  #define LED_PIN 23                     //Output pin for the WS2812B led strip. Dave recomends pin 5 but it is being used by LoRa on my board
 #elif defined(ARDUINO_LOLIN32)
   #define OLED_CLOCK 4              // Pins for OLED display
   #define OLED_DATA 5
   #define OLED_RESET 16
-  #define LED_PIN 5 //Output pin for the WS2812B led strip.
+//  #define LED_PIN 5 //Output pin for the WS2812B led strip.
 #else
-  #define OLED_CLOCK 4              // Pins for OLED display
-  #define OLED_DATA 5
-  #define OLED_RESET 16
-  #define LED_PIN 5 //Output pin for the WS2812B led strip.
+  // #define OLED_CLOCK 4              // Pins for OLED display
+  // #define OLED_DATA 5
+  // #define OLED_RESET 16
+//  #define LED_PIN 5 //Output pin for the WS2812B led strip.
 #endif
 
 //clock and data got swapped around to use hardware I2C instead of software
@@ -53,21 +52,19 @@ U8G2_SSD1306_128X64_NONAME_F_SW_I2C g_oled(U8G2_R2, OLED_CLOCK, OLED_DATA, OLED_
 int g_linehight = 0;
 
 //Adafruit_ADS1015 ads1015;  	// Construct an ads1015 at the default address: 0x48
-Adafruit_ADS1115 ads1115(0x48);	// construct an ads1115 at address 0x49
+Adafruit_ADS1115 ads1115(0x48);	// construct an ads1115 at address 0x48
 
 const float scaleValue = 0.0078125; //0.0078125mV per division
-const int ampsPerMv = 100;
+const int ampsPerMv = 1;
 int led = LED_BUILTIN;
 
-// amperage
-//
 // Tracks a weighted average in order to smooth out the values that it is given. 
 // as the simple reciprocal of the amount of taken specified by the caller.
 // it takes about ten readings to sabilize.
-double amperage (double amps){
-  static double amperage;
-  amperage = (amperage * 0.9) + (amps * 0.1);
-  return amperage;
+double weightedAverage (double amps){
+  static double weightedAverage;
+  weightedAverage = (weightedAverage * 0.95) + (amps * 0.05); // the two multipliers must equal one
+  return weightedAverage;
 }
 
 void setup(void)
@@ -95,7 +92,7 @@ void setup(void)
   // ads1115.setGain(GAIN_TWO);        // 2x gain   +/- 2.048V  1 bit = 1mV      0.0625mV
   // ads1115.setGain(GAIN_FOUR);       // 4x gain   +/- 1.024V  1 bit = 0.5mV    0.03125mV
   // ads1115.setGain(GAIN_EIGHT);      // 8x gain   +/- 0.512V  1 bit = 0.25mV   0.015625mV
-  // ads1115.setGain(GAIN_SIXTEEN);    // 16x gain  +/- 0.256V  1 bit = 0.125mV  0.0078125mV
+  ads1115.setGain(GAIN_SIXTEEN);    // 16x gain  +/- 0.256V  1 bit = 0.125mV  0.0078125mV
 
   Serial.begin(115200);
   while (!Serial){};
@@ -109,7 +106,7 @@ void setup(void)
 void loop(void)
 {
   int16_t adc0, adc1, adc2, adc3, diff_0_1;
-  float diffMv_0_1, amps;
+  float diffMv_0_1, amps, ampsWt;
 
   adc0 = ads1115.readADC_SingleEnded(0);
   adc1 = ads1115.readADC_SingleEnded(1);
@@ -117,9 +114,13 @@ void loop(void)
   adc3 = ads1115.readADC_SingleEnded(3);
   diff_0_1 = ads1115.readADC_Differential_0_1();
 
-  diffMv_0_1 =  diff_0_1 * scaleValue;
-  amps = diffMv_0_1 * ampsPerMv;
-  amps = amperage(amps); //smooth the amperage
+  diffMv_0_1 = ((float)diff_0_1 * 256.0) / 32768.0;//100mv shunt do the math here instead of having to use decimal numbers, not sure if it matters
+  amps = diffMv_0_1;
+  ampsWt = weightedAverage(amps); //apply weighted average to the scaled value
+
+  // diffMv_0_1 =  (float)diff_0_1 * scaleValue;  //convert value read to mv
+  // amps = diffMv_0_1 / (float)ampsPerMv;  //convet mv to amps, scale the reading
+  // ampsWt = amperage(amps); //apply weighted average to the scaled value
 
   Serial.print("AIN0: "); Serial.println(adc0);
   Serial.print("AIN1: "); Serial.println(adc1);
@@ -128,16 +129,19 @@ void loop(void)
 //  Serial.print("Diff_0_1: "); Serial.println(diff_0_1, 15);
   Serial.print("diff_0_1: "); Serial.print(diff_0_1); Serial.println();
   Serial.print("diffMv_0_1: "); Serial.printf("%.3lf", diffMv_0_1); Serial.println();
-  Serial.print("amps: "); Serial.printf("%10.3lf", amps); Serial.println();
+  Serial.print("ampsWt: "); Serial.printf("%10.3lf", ampsWt); Serial.println();
   Serial.print("The gain is: "); Serial.println(ads1115.getGain());
   Serial.print("scaleValue is: "); Serial.println(scaleValue, 7);
   Serial.print("ampsPerMv is: "); Serial.println(ampsPerMv);
   Serial.println();
   
   //g_oled.print(aShunt, 4 );
-  g_oled.setCursor(18,g_linehight * 3 + 2);
-  g_oled.printf("%06.1lf", amps);
-  g_oled.sendBuffer();                                            // Print it out to the OLED
+  g_oled.setCursor(18,g_linehight * 2 + 2);
+  g_oled.printf("%05.1lf", amps);       // send the amps to the OLED
+  //g_oled.printf("+%05d", diff_0_1);
+  g_oled.setCursor(20,g_linehight * 4 + 2);
+  g_oled.printf("%05.1lf", ampsWt);     // send the amps weighted average to the OLED
+  g_oled.sendBuffer();                  // Print it out to the OLED
 
   digitalWrite(led, !digitalRead(led));
   delay(100);
