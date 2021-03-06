@@ -58,12 +58,17 @@ const float scaleValue = 0.0078125; //0.0078125mV per division
 const int ampsPerMv = 1;
 int led = LED_BUILTIN;
 
+// Generally, you should use "unsigned long" for variables that hold time
+// The value will quickly become too large for an int to store
+unsigned long previousMillis = 0;     // will store last time OLED was updated
+const long interval = 1000;           // interval at which to update the OLED and send info to serial
+
 // Tracks a weighted average in order to smooth out the values that it is given. 
 // as the simple reciprocal of the amount of taken specified by the caller.
 // it takes about ten readings to sabilize.
 double weightedAverage (double amps){
   static double weightedAverage;
-  weightedAverage = (weightedAverage * 0.95) + (amps * 0.05); // the two multipliers must equal one
+  weightedAverage = (weightedAverage * 0.9) + (amps * 0.1); // the two multipliers must equal one
   return weightedAverage;
 }
 
@@ -107,6 +112,7 @@ void loop(void)
 {
   int16_t adc0, adc1, adc2, adc3, diff_0_1;
   float diffMv_0_1, amps, ampsWt;
+   unsigned long currentMillis = millis();
 
   adc0 = ads1115.readADC_SingleEnded(0);
   adc1 = ads1115.readADC_SingleEnded(1);
@@ -121,28 +127,31 @@ void loop(void)
   // diffMv_0_1 =  (float)diff_0_1 * scaleValue;  //convert value read to mv
   // amps = diffMv_0_1 / (float)ampsPerMv;  //convet mv to amps, scale the reading
   // ampsWt = amperage(amps); //apply weighted average to the scaled value
+	if (currentMillis - previousMillis >= interval) {
+		previousMillis = currentMillis;
+		Serial.print("AIN0: "); Serial.println(adc0);
+		Serial.print("AIN1: "); Serial.println(adc1);
+		Serial.print("AIN2: "); Serial.println(adc2);
+		Serial.print("AIN3: "); Serial.println(adc3);
+	//  Serial.print("Diff_0_1: "); Serial.println(diff_0_1, 15);
+		Serial.print("diff_0_1: "); Serial.print(diff_0_1); Serial.println();
+		Serial.print("diffMv_0_1: "); Serial.printf("%.3lf", diffMv_0_1); Serial.println();
+		Serial.print("ampsWt: "); Serial.printf("%10.3lf", ampsWt); Serial.println();
+		Serial.print("The gain is: "); Serial.println(ads1115.getGain());
+		Serial.print("scaleValue is: "); Serial.println(scaleValue, 7);
+		Serial.print("ampsPerMv is: "); Serial.println(ampsPerMv);
+		Serial.println();
+		
+		//g_oled.print(aShunt, 4 );
+		g_oled.setCursor(18,g_linehight * 2 + 2);
+		g_oled.printf("%05.1lf", amps);       // send the amps to the OLED
+		//g_oled.printf("+%05d", diff_0_1);
+		g_oled.setCursor(20,g_linehight * 4 + 2);
+		g_oled.printf("%05.1lf", ampsWt);     // send the amps weighted average to the OLED
+		g_oled.sendBuffer();                  // Print it out to the OLED
 
-  Serial.print("AIN0: "); Serial.println(adc0);
-  Serial.print("AIN1: "); Serial.println(adc1);
-  Serial.print("AIN2: "); Serial.println(adc2);
-  Serial.print("AIN3: "); Serial.println(adc3);
-//  Serial.print("Diff_0_1: "); Serial.println(diff_0_1, 15);
-  Serial.print("diff_0_1: "); Serial.print(diff_0_1); Serial.println();
-  Serial.print("diffMv_0_1: "); Serial.printf("%.3lf", diffMv_0_1); Serial.println();
-  Serial.print("ampsWt: "); Serial.printf("%10.3lf", ampsWt); Serial.println();
-  Serial.print("The gain is: "); Serial.println(ads1115.getGain());
-  Serial.print("scaleValue is: "); Serial.println(scaleValue, 7);
-  Serial.print("ampsPerMv is: "); Serial.println(ampsPerMv);
-  Serial.println();
-  
-  //g_oled.print(aShunt, 4 );
-  g_oled.setCursor(18,g_linehight * 2 + 2);
-  g_oled.printf("%05.1lf", amps);       // send the amps to the OLED
-  //g_oled.printf("+%05d", diff_0_1);
-  g_oled.setCursor(20,g_linehight * 4 + 2);
-  g_oled.printf("%05.1lf", ampsWt);     // send the amps weighted average to the OLED
-  g_oled.sendBuffer();                  // Print it out to the OLED
-
-  digitalWrite(led, !digitalRead(led));
-  delay(100);
+		digitalWrite(led, !digitalRead(led));
+	//	delay(100);
+	}
+delay(10);
 }
