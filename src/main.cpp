@@ -25,10 +25,15 @@ const String sketchName = "ADS1115 Test";
 // For the heltec_wifi_lora_32 CLOCK 15 DATA 4 RESET 16
 // For the wemos lolin32 #define CLOCK 4 DATA 5 RESET 16
 
-// The active board is declared in platformio.ini. The defined is all caps
-// and is a combination of the environment and the default_envs.
+// The active board is declared in platformio.ini. The define is 
+// declared in pins_arduino.h.
 
 #if defined(ARDUINO_HELTEC_WIFI_LORA_32) //# is evaluated at time of compile
+  #define OLED_CLOCK SCL_OLED            // Pins for OLED display
+  #define OLED_DATA SDA_OLED
+  #define OLED_RESET RST_OLED
+//  #define LED_PIN 23                     //Output pin for the WS2812B led strip. Dave recomends pin 5 but it is being used by LoRa on my board
+#elif defined(WIFI_LoRa_32_V2) //# is evaluated at time of compile
   #define OLED_CLOCK SCL_OLED            // Pins for OLED display
   #define OLED_DATA SDA_OLED
   #define OLED_RESET RST_OLED
@@ -39,10 +44,10 @@ const String sketchName = "ADS1115 Test";
   #define OLED_RESET 16
 //  #define LED_PIN 5 //Output pin for the WS2812B led strip.
 #else
-  // #define OLED_CLOCK 4              // Pins for OLED display
-  // #define OLED_DATA 5
+  // #define OLED_CLOCK 15              // Pins for OLED display
+  // #define OLED_DATA 4
   // #define OLED_RESET 16
-//  #define LED_PIN 5 //Output pin for the WS2812B led strip.
+  // #define LED_PIN 5 //Output pin for the WS2812B led strip.
 #endif
 
 //clock and data got swapped around to use hardware I2C instead of software
@@ -92,12 +97,12 @@ void setup(void)
   // Setting these values incorrectly may destroy your ADC!
   //                                                                ADS1015  ADS1115
   //                                                                -------  -------
-  // ads1115.setGain(GAIN_TWOTHIRDS);  // 2/3x gain +/- 6.144V  1 bit = 3mV      0.1875mV (default)
+   ads1115.setGain(GAIN_TWOTHIRDS);  // 2/3x gain +/- 6.144V  1 bit = 3mV      0.1875mV (default)
   // ads1115.setGain(GAIN_ONE);        // 1x gain   +/- 4.096V  1 bit = 2mV      0.125mV
   // ads1115.setGain(GAIN_TWO);        // 2x gain   +/- 2.048V  1 bit = 1mV      0.0625mV
   // ads1115.setGain(GAIN_FOUR);       // 4x gain   +/- 1.024V  1 bit = 0.5mV    0.03125mV
   // ads1115.setGain(GAIN_EIGHT);      // 8x gain   +/- 0.512V  1 bit = 0.25mV   0.015625mV
-  ads1115.setGain(GAIN_SIXTEEN);    // 16x gain  +/- 0.256V  1 bit = 0.125mV  0.0078125mV
+  // ads1115.setGain(GAIN_SIXTEEN);    // 16x gain  +/- 0.256V  1 bit = 0.125mV  0.0078125mV
 
   Serial.begin(115200);
   while (!Serial){};
